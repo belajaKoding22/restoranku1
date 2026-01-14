@@ -1,6 +1,15 @@
 @extends('costumer.layouts.master')
 
 @section('content')
+    <!-- Single Page Header start -->
+        <div class="container-fluid page-header py-5">
+            <h1 class="text-center text-white display-6">Keranjang</h1>
+            <ol class="breadcrumb justify-content-center mb-0">
+                <li class="breadcrumb-item active text-primary">Silakan periksa kembali pesanan anda</li>
+            </ol>
+        </div>
+    <!-- Single Page Header End -->
+
     <!-- Cart Page Start -->
         <div class="container-fluid py-5">
             <div class="container py-5">
@@ -44,8 +53,8 @@
                                 
                                     <tr>
                                         <th scope="row">
-                                            <div class="d-flex align-items-center">
-                                                <img src="https://images.unsplash.com/photo-1591325418441-ff678baf78ef" class="img-fluid me-5 rounded-circle" style="width: 80px; height: 80px;" alt="">
+                                            <div class="d-flex align-items-center mt-2">
+                                                <img src="{{ asset('img_item_upload/'. $item['image']) }}" class="img-fluid me-5 rounded-circle" style="width: 80px; height:80px;" alt="" onerror="this.onerror=null;this.src='{{ $item['image'] }}';">
                                             </div>
                                         </th>
                                         <td>
@@ -57,13 +66,13 @@
                                         <td>
                                             <div class="input-group quantity mt-4" style="width: 100px;">
                                                 <div class="input-group-btn">
-                                                    <button class="btn btn-sm btn-minus rounded-circle bg-light border" >
+                                                    <button class="btn btn-sm btn-minus rounded-circle bg-light border" onclick="updateQuantity({{ $item['id'] }}, -1)">
                                                     <i class="fa fa-minus"></i>
                                                     </button>
                                                 </div>
-                                                <input type="text" class="form-control form-control-sm text-center border-0" value="{{ $item['qty'] }}">
+                                                <input id="qty-{{ $item['id'] }}" type="text" class="form-control form-control-sm text-center border-0 bg-transparan" value="{{ $item['qty'] }}">
                                                 <div class="input-group-btn">
-                                                    <button class="btn btn-sm btn-plus rounded-circle bg-light border">
+                                                    <button class="btn btn-sm btn-plus rounded-circle bg-light border" onclick="updateQuantity({{ $item['id'] }}, 1)">
                                                         <i class="fa fa-plus"></i>
                                                     </button>
                                                 </div>
@@ -73,7 +82,7 @@
                                             <p class="mb-0 mt-4">{{ 'Rp'. number_format($item['price'] * $item['qty'], 0, ',','.') }}</p>
                                         </td>
                                         <td>
-                                            <button class="btn btn-md rounded-circle bg-light border mt-4" >
+                                            <button class="btn btn-md rounded-circle bg-light border mt-4" onclick="if(confirm('Apakah Anda yakin ingin menghapus item ini dari keranjang?')) {removeItemFromCart('{{ $item['id'] }}') }">
                                                 <i class="fa fa-times text-danger"></i>
                                             </button>
                                         </td>
@@ -89,6 +98,9 @@
                         $total = $subtotal + $tax;
                     @endphp
 
+                    <div class="d-flex justify-content-end">
+                        <a href="{{ route('cart.clear') }}" class="btn btn-danger" onclick="return confirm('Apakah anda yakin ingin mengosongkan keranjang ?')">Kosongkan</a>
+                    </div>
                     <div class="row g-4 justify-content-end mt-1">
                         <div class="col-8"></div>
                         <div class="col-sm-8 col-md-7 col-lg-6 col-xl-4">
@@ -97,12 +109,12 @@
                                     <h2 class="display-6 mb-4">Total <span class="fw-normal">Pesanan</span></h2>
                                     <div class="d-flex justify-content-between mb-4">
                                         <h5 class="mb-0 me-4">Subtotal</h5>
-                                        <p class="mb-0">Rp {{ number_format($subtotal, 0, ',','.') }}</p>
+                                        <p class="mb-0">Rp {{ number_format($subtotal, 0, ',','.') }} </p>
                                     </div>
                                     <div class="d-flex justify-content-between">
                                         <p class="mb-0 me-4">Pajak (10%)</p>
                                         <div class="">
-                                            <p class="mb-0">Rp {{ number_format($tax, 0, ',','.') }}</p>
+                                            <p class="mb-0">Rp {{ number_format($tax, 0, ',','.') }} </p>
                                         </div>
                                     </div>
                                 </div>
@@ -122,5 +134,123 @@
                 @endif
             </div>
         </div>
-        <!-- Cart Page End -->
+        <!-- Cart Page End -->  
+     <script>
+        // fungsi untuk memperbarui jumlah item di keranjang
+        function updateQuantity(itemId, change) {
+            var qtyInput = document.getElementById('qty-' + itemId);
+            var currentQty = parseInt(qtyInput.value);
+            var newQty = currentQty + change;
+
+            if (newQty < 1) {
+                if (confirm('Jumlah item adalah 1. Apakah Anda ingin menghapus item ini dari keranjang?')) {
+                    removeItemFromCart(itemId);
+                }
+                return; // jangan perbarui jika jumlah kurang dari 1
+            }
+            fetch("{{ route('cart.update') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ id: itemId, qty: newQty })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    qtyInput.value = newQty;
+                    location.reload();
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+
+        // fungsi untuk menghapus item dari keranjang
+        function removeItemFromCart(itemId) {
+            fetch("{{ route('cart.remove')}}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ id: itemId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+    </script>  
 @endsection
+
+{{-- @section('script')
+    <script>
+        // fungsi untuk memperbarui jumlah item di keranjang
+        function updateQuantity(itemId, change) {
+            var qtyInput = document.getElementById('qty-' + itemId);
+            var currentQty = parseInt(qtyInput.value);
+            var newQty = currentQty + change;
+
+            if (newQty < 1) {
+                if (confirm('Jumlah item adalah 1. Apakah Anda ingin menghapus item ini dari keranjang?')) {
+                    removeItemFromCart(itemId);
+                }
+                return; // jangan perbarui jika jumlah kurang dari 1
+            }
+            fetch("{{ route('cart.update') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({ id: itemId, qty: newQty })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    qtyInput.value = newQty;
+                    location.reload();
+                } else {
+                    alert(data.message);
+                }
+            });
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+
+        // fungsi untuk menghapus item dari keranjang
+        function removeItemFromCart(itemId) {
+            fetch(`/cart/remove/${itemId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Gagal menghapus item dari keranjang.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+    </script>
+@endsection --}}
