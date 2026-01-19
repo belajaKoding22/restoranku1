@@ -46,7 +46,7 @@
                 </tbody>
             </table>
             <hr>
-            @if ($order->payment_method == 'tunai')
+            @if ($order->payment_method == 'cash')
                 <p class="small text-center">Tunjakkan kode bayar ini ke kasir untuk menyelesaikan pembayaran. Jangan lupa senyum ya!!</p>
             @elseif ($order->payment_method == 'qris')
                 <p class="small text-center">yea!! pembayaran berhasil. Silahkan duduk manis pesanan anda sedang di proses</p>
