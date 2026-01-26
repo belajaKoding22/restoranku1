@@ -30,18 +30,22 @@ class MenuController extends Controller
 
     public function cart()
     {
+        // mengambil data keranjang dari session
         $cart = Session::get('cart');
+        // mengirim data keranjang ke view
         return view('costumer.cart', compact('cart'));
     }
 
     public function addToCart(Request $request)
     {
-        // Validasi input
+        // Mengambil ID menu dari request
         $menuId = $request->input('id');
+        // Mencari menu berdasarkan ID
         $menu = Item::findOrFail($menuId);
         
         // Cek jika menu ditemukan
         if (!$menu) {
+            // Kembalikan respon error jika menu tidak ditemukan
             return response()->json([
                 'status' => 'error',
                 'error' => 'Menu item tidak ditemukan'
@@ -89,6 +93,7 @@ class MenuController extends Controller
         }
 
         $cart = Session::get('cart');
+        // Periksa apakah item ada di keranjang
         if (isset($cart[$itemId])) {
             $cart[$itemId]['qty'] = $newQty;
             Session::put('cart', $cart);
@@ -170,7 +175,7 @@ class MenuController extends Controller
             // di ambil dari orderItem
             $itemDetails[] = [
                 'id' => $item['id'],
-                'price' => (int) $item['price'] + ($item['price'] * 0.1), // termasuk pajak 10%
+                'price' => (int) ($item['price'] + ($item['price'] * 0.1)), // termasuk pajak 10%
                 'quantity' => $item['qty'],
                 'name' => substr($item['name'], 0, 50), //panjang string dari 0 sampai 50
             ];
@@ -185,7 +190,7 @@ class MenuController extends Controller
 
         // menyimpan data order ke database
         $order = Order::create([
-            'order_code' => 'ORD' . $tableNumber.'-'. time(),
+            'order_code' => 'ORD-' . $tableNumber.'-'. time(),
             'user_id' => $user->id,
             'sub_total' => $totalAmount,
             'tax' => $totalAmount * 0.1, // pajak 10%
@@ -211,11 +216,59 @@ class MenuController extends Controller
 
         Session::forget('cart');
 
-        return redirect()->route('order.success', ['orderId' => $order->order_code])->with('success', 'Pesanan anda telah diterima. Terima kasih!');
+        if ($request->payment_method == 'cash') {
+            // untuk metode pembayaran cash
+            return redirect()->route('order.success', ['orderId' => $order->order_code])->with('success', 'Pesanan anda telah diterima. Terima kasih!');
+        } else {
+            // untuk metode pembayaran qris dengan midtrans
+            // Konfigurasi Midtrans
+            \Midtrans\Config::$serverKey = config('midtrans.server_key');
+            \Midtrans\Config::$isProduction = config('midtrans.is_production');
+            \Midtrans\Config::$isSanitized = true;
+            \Midtrans\Config::$is3ds = true;
+
+            // Menyiapkan parameter transaksi
+            $params = [
+                // Data transaksi
+                'transaction_details' => [
+                    'order_id' => $order->order_code,
+                    'gross_amount' => (int) $order->grand_total,
+                ],
+                // Data item yang dibeli
+                'item_details' => $itemDetails,
+                'customer_details' => [
+                    // Data pembeli
+                    'first_name' => $user->fullname ?? 'guest',
+                    'phone' => $user->phone,
+                ],
+                // Metode pembayaran
+                'payment_type' => 'qris',
+            ];
+
+            try {
+                // Membuat transaksi di Midtrans
+                $snapToken = \Midtrans\Snap::getSnapToken($params);
+
+                // Mengembalikan token Snap ke frontend
+                return response()->json([
+                    'status' => 'success',
+                    'snap_token' => $snapToken,
+                    'order_id' => $order->order_code,
+                ]);
+            } catch (\Exception $e) {
+                // Menangani error jika terjadi kegagalan dalam pembuatan transaksi
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Gagal membuat transaksi, silakan coba lagi.',
+                ], 500);
+            }
+        }
+        
     }
 
     public function orderSuccess($orderId)
     {
+        // mengambil data order berdasarkan order code
         $order = Order::where('order_code', $orderId)->first();
 
         if (!$order) {
